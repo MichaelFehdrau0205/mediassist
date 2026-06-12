@@ -1,6 +1,15 @@
 # MediAssist
 
-A mock healthcare triage chatbot built for educational purposes. This is a practice target system for AI security exercises.
+MediAssist is a mock AI-powered healthcare triage chatbot for a fictional clinic called Riverside Medical Center. Patients log in with their patient ID and can chat with an AI assistant to:
+
+- Describe symptoms and receive triage guidance
+- Review their medical history, medications, and allergies
+- Book appointments and request specialist referrals
+- Ask questions about their care
+
+The system is built with a Python/FastAPI backend, a Claude-compatible LLM via OpenRouter, a SQLite patient database, and a simple browser-based chat UI. It includes 10 pre-loaded fictional patients, a clinical knowledge base, and structured request logging.
+
+This is a practice target system used in AI cybersecurity curriculum for red team exercises. Builders use it to learn how to probe, test, and evaluate the security of AI agent systems.
 
 **Disclaimer:** This is not a real healthcare product. It is not affiliated with any organization, company, or medical institution. All patient data, names, records, and credentials in this system are entirely fictional and randomly generated. Do not use this system for any real medical purpose.
 
