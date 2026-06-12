@@ -1,0 +1,6 @@
+.env
+data/patients.db
+logs/requests.log
+__pycache__/
+*.pyc
+.venv/
