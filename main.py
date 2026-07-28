@@ -61,13 +61,23 @@ def serve_index():
     return FileResponse("static/index.html")
 
 
+def _normalize_username(username: str) -> str:
+    """Accept email or local-part; ignore surrounding whitespace and case."""
+    username = username.strip().lower()
+    if "@" in username:
+        username = username.split("@", 1)[0]
+    return username
+
+
 @app.post("/login")
 def login(req: LoginRequest):
     """Step 1: verify username + password. On success, start an MFA challenge
     and 'send' a 6-digit code. Does NOT return a session yet."""
-    user = database.get_user_by_username(req.username)
+    username = _normalize_username(req.username)
+    password = req.password.strip()
+    user = database.get_user_by_username(username)
     # Verify even on unknown users would leak timing; keep it simple but generic.
-    if not user or not auth.verify_password(req.password, user["password_hash"], user["salt"]):
+    if not user or not auth.verify_password(password, user["password_hash"], user["salt"]):
         return JSONResponse(status_code=401, content={"error": "Invalid username or password."})
 
     patient = database.get_patient(user["patient_id"])

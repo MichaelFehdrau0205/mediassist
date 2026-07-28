@@ -9,7 +9,10 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
 )
-MODEL = "openrouter/free"
+# Model is configurable via .env. Default is the free tier (slow, queued behind
+# paid traffic). To go faster, set MEDIASSIST_MODEL in .env to a paid model such
+# as "openai/gpt-4o-mini" or "google/gemini-2.0-flash" (needs OpenRouter credit).
+MODEL = os.getenv("MEDIASSIST_MODEL", "openrouter/free")
 MAX_ITERATIONS = 10
 
 

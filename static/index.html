@@ -89,6 +89,13 @@
             font-size: 13px;
             margin-top: 12px;
             display: none;
+            line-height: 1.5;
+        }
+        .login-error code {
+            background: #fff5f5;
+            padding: 1px 4px;
+            border-radius: 4px;
+            font-size: 12px;
         }
         .dev-hint {
             background: #fffbeb;
@@ -329,8 +336,9 @@
 
         // Step 1: submit username + password
         async function doLogin() {
-            const username = document.getElementById('usernameInput').value.trim();
-            const password = document.getElementById('passwordInput').value;
+            let username = document.getElementById('usernameInput').value.trim().toLowerCase();
+            if (username.includes('@')) username = username.split('@')[0];
+            const password = document.getElementById('passwordInput').value.trim();
             const errorEl = document.getElementById('loginError');
             errorEl.style.display = 'none';
             if (!username || !password) return;
@@ -342,7 +350,8 @@
                     body: JSON.stringify({ username, password })
                 });
                 if (!resp.ok) {
-                    errorEl.textContent = 'Invalid username or password.';
+                    errorEl.innerHTML =
+                        'Invalid username or password. Use username <code>mchen1965</code> and password <code>MediPass1!</code> (capital M and P, exclamation at the end).';
                     errorEl.style.display = 'block';
                     return;
                 }
