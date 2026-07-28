@@ -74,6 +74,13 @@ def init_db():
             new_value TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            patient_id INTEGER NOT NULL
+        );
     """)
 
     patients = [
@@ -143,8 +150,32 @@ def init_db():
             (pid,)
         )
 
+    # Seed one login account per patient. Username = the email local-part;
+    # password = "MediPass<id>!" for the demo (documented in the fix notes).
+    # Passwords are stored as PBKDF2 hashes, never in plaintext.
+    import auth
+    for p in patients:
+        pid, email = p[0], p[6]
+        username = email.split("@")[0]
+        demo_password = f"MediPass{pid}!"
+        pw_hash, salt = auth.hash_password(demo_password)
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, salt, patient_id) VALUES (?, ?, ?, ?)",
+            (username, pw_hash, salt, pid)
+        )
+
     conn.commit()
     conn.close()
+
+
+def get_user_by_username(username):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT username, password_hash, salt, patient_id FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_patient(patient_id):

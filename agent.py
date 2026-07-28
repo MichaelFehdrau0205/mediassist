@@ -28,13 +28,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_patient_info",
-            "description": "Retrieve a patient's full medical record including personal information, diagnosis history, medications, and allergies.",
+            "description": "Retrieve the current logged-in patient's own full medical record (personal information, diagnosis history, medications, and allergies). Always returns the logged-in patient's record; you cannot look up anyone else.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "patient_id": {"type": "integer", "description": "The patient ID to look up"}
-                },
-                "required": ["patient_id"]
+                "properties": {},
+                "required": []
             }
         }
     },
@@ -56,15 +54,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "book_appointment",
-            "description": "Schedule an appointment for a patient.",
+            "description": "Schedule an appointment for the current logged-in patient.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "integer", "description": "The patient ID to book for"},
                     "appointment_type": {"type": "string", "description": "Type of appointment (e.g., routine follow-up, urgent visit, annual wellness exam)"},
                     "preferred_date": {"type": "string", "description": "Preferred date and time for the appointment"}
                 },
-                "required": ["patient_id", "appointment_type", "preferred_date"]
+                "required": ["appointment_type", "preferred_date"]
             }
         }
     },
@@ -72,27 +69,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_medical_record",
-            "description": "Update a field in a patient's medical record.",
+            "description": "Update an allowed contact field (phone, email, or address) in the current logged-in patient's own record.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "integer", "description": "The patient ID to update"},
-                    "field": {"type": "string", "description": "The field name to update"},
+                    "field": {"type": "string", "description": "The field to update: phone, email, or address"},
                     "value": {"type": "string", "description": "The new value for the field"}
                 },
-                "required": ["patient_id", "field", "value"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_all_patients",
-            "description": "Retrieve the patient directory with names, dates of birth, primary conditions, and contact information. Useful for care coordination.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
+                "required": ["field", "value"]
             }
         }
     },
@@ -100,15 +84,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "send_referral",
-            "description": "Send a specialist referral for a patient.",
+            "description": "Send a specialist referral for the current logged-in patient.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "patient_id": {"type": "integer", "description": "The patient ID to refer"},
                     "specialist_type": {"type": "string", "description": "Type of specialist (e.g., cardiology, endocrinology, neurology)"},
                     "reason": {"type": "string", "description": "Clinical reason for the referral"}
                 },
-                "required": ["patient_id", "specialist_type", "reason"]
+                "required": ["specialist_type", "reason"]
             }
         }
     },
@@ -164,12 +147,24 @@ Clinical knowledge base and protocols:
 {knowledge_base}"""
 
 
+# Fields a patient is allowed to change on their own record. Restricting this to
+# a fixed set does two jobs: it blocks arbitrary edits, and it closes the SQL
+# injection in database.update_medical_record, because `field` can now only ever
+# be one of these known-safe column names.
+ALLOWED_UPDATE_FIELDS = {"phone", "email", "address"}
+
+
 def execute_tool(tool_name, tool_input, patient_id):
+    # SECURITY: identity always comes from `patient_id`, which is the verified
+    # session id passed in by the caller. It is NEVER taken from `tool_input`,
+    # which the model (and therefore the user) controls. This makes it
+    # structurally impossible for a prompt injection to reach another patient's
+    # data — there is no argument left for the model to put a foreign id into.
     if tool_name == "get_patient_info":
-        result = database.get_patient(tool_input["patient_id"])
+        result = database.get_patient(patient_id)
         if result:
             return str(result)
-        return f"No patient found with ID {tool_input['patient_id']}"
+        return f"No record found for the current patient (ID {patient_id})."
 
     elif tool_name == "search_symptoms":
         kb = load_knowledge_base()
@@ -182,33 +177,33 @@ def execute_tool(tool_name, tool_input, patient_id):
 
     elif tool_name == "book_appointment":
         appt_id = database.book_appointment(
-            tool_input["patient_id"],
+            patient_id,
             tool_input["appointment_type"],
             tool_input["preferred_date"]
         )
         return f"Appointment booked successfully. Appointment ID: {appt_id}. Type: {tool_input['appointment_type']}. Scheduled for: {tool_input['preferred_date']}."
 
     elif tool_name == "update_medical_record":
+        field = tool_input["field"]
+        if field not in ALLOWED_UPDATE_FIELDS:
+            return ("Update refused. Patients may only update these fields: "
+                    f"{', '.join(sorted(ALLOWED_UPDATE_FIELDS))}.")
         result = database.update_medical_record(
-            tool_input["patient_id"],
-            tool_input["field"],
+            patient_id,
+            field,
             tool_input["value"]
         )
         if result:
             return f"Record updated. Field '{result['field']}' changed from '{result['old_value']}' to '{result['new_value']}' for patient {result['patient_id']}."
-        return f"Failed to update record. Patient {tool_input['patient_id']} not found."
-
-    elif tool_name == "get_all_patients":
-        patients = database.get_all_patients()
-        return str(patients)
+        return f"Failed to update record for the current patient (ID {patient_id})."
 
     elif tool_name == "send_referral":
         ref_id = database.send_referral(
-            tool_input["patient_id"],
+            patient_id,
             tool_input["specialist_type"],
             tool_input["reason"]
         )
-        return f"Referral sent. Referral ID: {ref_id}. Specialist: {tool_input['specialist_type']}. Patient: {tool_input['patient_id']}."
+        return f"Referral sent. Referral ID: {ref_id}. Specialist: {tool_input['specialist_type']}. Patient: {patient_id}."
 
     elif tool_name == "save_memory":
         database.save_memory(patient_id, tool_input["note"])

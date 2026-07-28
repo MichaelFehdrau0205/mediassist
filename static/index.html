@@ -253,10 +253,25 @@
         <div class="login-card">
             <div class="logo"><span class="cross">&#10010;</span>MediAssist</div>
             <div class="subtitle">Riverside Medical Center Patient Portal</div>
-            <label for="patientIdInput">Patient ID</label>
-            <input type="text" id="patientIdInput" placeholder="Enter your patient ID (1-10)" autocomplete="off">
-            <button onclick="doLogin()">Sign In</button>
-            <div class="login-error" id="loginError">Patient not found. Please enter a valid ID (1-10).</div>
+
+            <!-- Step 1: username + password -->
+            <div id="passwordStep">
+                <label for="usernameInput">Username</label>
+                <input type="text" id="usernameInput" placeholder="e.g. mchen1965" autocomplete="username">
+                <label for="passwordInput" style="margin-top:12px;">Password</label>
+                <input type="password" id="passwordInput" placeholder="Enter your password" autocomplete="current-password">
+                <button onclick="doLogin()">Sign In</button>
+            </div>
+
+            <!-- Step 2: MFA code (hidden until password succeeds) -->
+            <div id="mfaStep" style="display:none;">
+                <div class="subtitle" id="mfaSentMsg" style="margin-bottom:16px;"></div>
+                <label for="mfaInput">6-digit verification code</label>
+                <input type="text" id="mfaInput" placeholder="000000" maxlength="6" autocomplete="one-time-code" inputmode="numeric">
+                <button onclick="verifyMfa()">Verify</button>
+            </div>
+
+            <div class="login-error" id="loginError">Invalid username or password.</div>
             <div class="disclaimer">For demonstration purposes only</div>
         </div>
     </div>
@@ -283,43 +298,94 @@
     </div>
 
     <script>
-        let patientId = null;
+        let sessionToken = null;      // issued only after password + MFA
+        let loginToken = null;        // short-lived, links the two login steps
         let conversationHistory = [];
 
+        // Step 1: submit username + password
         async function doLogin() {
-            const id = document.getElementById('patientIdInput').value.trim();
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value;
             const errorEl = document.getElementById('loginError');
             errorEl.style.display = 'none';
-
-            if (!id) return;
+            if (!username || !password) return;
 
             try {
-                const resp = await fetch(`/patient/${id}`);
+                const resp = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
                 if (!resp.ok) {
+                    errorEl.textContent = 'Invalid username or password.';
                     errorEl.style.display = 'block';
                     return;
                 }
                 const data = await resp.json();
-                patientId = parseInt(id);
-                document.getElementById('patientNameDisplay').textContent = data.name;
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('chatScreen').style.display = 'flex';
-                conversationHistory = [];
-                addMessage('assistant', `Hello, ${data.name.split(' ')[0]}! I'm MediAssist, your healthcare triage assistant. How can I help you today?`, [], null);
-                document.getElementById('messageInput').focus();
+                loginToken = data.login_token;
+                document.getElementById('mfaSentMsg').textContent =
+                    'We sent a 6-digit code to ' + data.mfa_sent_to + '.';
+                document.getElementById('passwordStep').style.display = 'none';
+                document.getElementById('mfaStep').style.display = 'block';
+                document.getElementById('mfaInput').focus();
             } catch (e) {
+                errorEl.textContent = 'Something went wrong. Please try again.';
                 errorEl.style.display = 'block';
             }
         }
 
-        function doLogout() {
-            patientId = null;
+        // Step 2: submit the MFA code -> receive a session token
+        async function verifyMfa() {
+            const code = document.getElementById('mfaInput').value.trim();
+            const errorEl = document.getElementById('loginError');
+            errorEl.style.display = 'none';
+            if (!code) return;
+
+            try {
+                const resp = await fetch('/verify-mfa', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login_token: loginToken, code })
+                });
+                if (!resp.ok) {
+                    errorEl.textContent = 'Invalid or expired code.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+                const data = await resp.json();
+                sessionToken = data.session_token;
+                document.getElementById('patientNameDisplay').textContent = data.patient_name;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('chatScreen').style.display = 'flex';
+                conversationHistory = [];
+                addMessage('assistant', `Hello, ${data.patient_name.split(' ')[0]}! I'm MediAssist, your healthcare triage assistant. How can I help you today?`, [], null);
+                document.getElementById('messageInput').focus();
+            } catch (e) {
+                errorEl.textContent = 'Something went wrong. Please try again.';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        async function doLogout() {
+            try {
+                await fetch('/logout', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + sessionToken }
+                });
+            } catch (e) { /* ignore */ }
+            sessionToken = null;
+            loginToken = null;
             conversationHistory = [];
             document.getElementById('chatMessages').innerHTML =
                 '<div class="typing-indicator" id="typingIndicator"><span class="dots"><span>.</span><span>.</span><span>.</span></span> MediAssist is thinking...</div>';
             document.getElementById('chatScreen').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'flex';
-            document.getElementById('patientIdInput').value = '';
+            // reset the login form back to step 1
+            document.getElementById('mfaStep').style.display = 'none';
+            document.getElementById('passwordStep').style.display = 'block';
+            document.getElementById('usernameInput').value = '';
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('mfaInput').value = '';
         }
 
         async function sendMessage() {
@@ -338,9 +404,11 @@
             try {
                 const resp = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + sessionToken
+                    },
                     body: JSON.stringify({
-                        patient_id: patientId,
                         message: msg,
                         conversation_history: conversationHistory
                     })
@@ -393,12 +461,11 @@
         }
 
         async function resetMemory() {
-            if (!patientId) return;
+            if (!sessionToken) return;
             try {
                 await fetch('/reset', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ patient_id: patientId })
+                    headers: { 'Authorization': 'Bearer ' + sessionToken }
                 });
                 addMessage('assistant', 'Session memory has been cleared.', [], null);
             } catch (e) {
@@ -406,8 +473,11 @@
             }
         }
 
-        document.getElementById('patientIdInput').addEventListener('keydown', function(e) {
+        document.getElementById('passwordInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') doLogin();
+        });
+        document.getElementById('mfaInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') verifyMfa();
         });
     </script>
 </body>
