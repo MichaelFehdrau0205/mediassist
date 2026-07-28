@@ -73,7 +73,14 @@ def login(req: LoginRequest):
     patient = database.get_patient(user["patient_id"])
     login_token, code = auth.start_mfa_challenge(user["patient_id"])
     destination = auth.deliver_mfa_code(code, patient.get("email"), patient.get("phone"))
-    return {"login_token": login_token, "mfa_sent_to": destination}
+    response = {"login_token": login_token, "mfa_sent_to": destination}
+    if auth.is_dev_mode():
+        response["dev_mfa_code"] = code
+        response["dev_mfa_hint"] = (
+            "Dev mode: email/SMS delivery is disabled. "
+            "Use the code below, or check the terminal running python main.py."
+        )
+    return response
 
 
 @app.post("/verify-mfa")

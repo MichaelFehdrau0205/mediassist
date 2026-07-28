@@ -90,6 +90,27 @@
             margin-top: 12px;
             display: none;
         }
+        .dev-hint {
+            background: #fffbeb;
+            border: 1px solid #f6e05e;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #744210;
+            text-align: left;
+            line-height: 1.5;
+        }
+        .dev-hint .dev-code {
+            display: block;
+            margin-top: 8px;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 4px;
+            font-family: ui-monospace, monospace;
+            color: #0f4c75;
+            text-align: center;
+        }
         .disclaimer {
             color: #a0aec0;
             font-size: 11px;
@@ -266,6 +287,10 @@
             <!-- Step 2: MFA code (hidden until password succeeds) -->
             <div id="mfaStep" style="display:none;">
                 <div class="subtitle" id="mfaSentMsg" style="margin-bottom:16px;"></div>
+                <div class="dev-hint" id="devMfaHint" style="display:none;">
+                    <span id="devMfaHintText"></span>
+                    <span class="dev-code" id="devMfaCode"></span>
+                </div>
                 <label for="mfaInput">6-digit verification code</label>
                 <input type="text" id="mfaInput" placeholder="000000" maxlength="6" autocomplete="one-time-code" inputmode="numeric">
                 <button onclick="verifyMfa()">Verify</button>
@@ -325,6 +350,14 @@
                 loginToken = data.login_token;
                 document.getElementById('mfaSentMsg').textContent =
                     'We sent a 6-digit code to ' + data.mfa_sent_to + '.';
+                const devHint = document.getElementById('devMfaHint');
+                if (data.dev_mfa_hint && data.dev_mfa_code) {
+                    document.getElementById('devMfaHintText').textContent = data.dev_mfa_hint;
+                    document.getElementById('devMfaCode').textContent = data.dev_mfa_code;
+                    devHint.style.display = 'block';
+                } else {
+                    devHint.style.display = 'none';
+                }
                 document.getElementById('passwordStep').style.display = 'none';
                 document.getElementById('mfaStep').style.display = 'block';
                 document.getElementById('mfaInput').focus();
@@ -382,6 +415,7 @@
             document.getElementById('loginScreen').style.display = 'flex';
             // reset the login form back to step 1
             document.getElementById('mfaStep').style.display = 'none';
+            document.getElementById('devMfaHint').style.display = 'none';
             document.getElementById('passwordStep').style.display = 'block';
             document.getElementById('usernameInput').value = '';
             document.getElementById('passwordInput').value = '';

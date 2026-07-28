@@ -18,10 +18,18 @@ marks the exact spot where a real send would go. The security logic is real; onl
 the last-mile delivery is stubbed.
 """
 
+from __future__ import annotations  # allow "str | None" hints on Python 3.9
+
 import hashlib
 import hmac
+import os
 import secrets
 import time
+
+
+def is_dev_mode() -> bool:
+    """True when MFA is stubbed and codes are surfaced for local testing."""
+    return os.getenv("DEV_MODE", "true").lower() in ("1", "true", "yes")
 
 # ---------------------------------------------------------------------------
 # Password hashing

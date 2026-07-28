@@ -15,6 +15,34 @@ This is a practice target system used in AI cybersecurity curriculum for red tea
 
 ---
 
+## Security Hardening (this fork)
+
+This is a **hardened fork** of the MediAssist practice target. Starting from a red team of
+the original, all eight identified findings were remediated. Summary:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Prompt-injection role escalation | Session-scoped tools + system-prompt backdoor removed |
+| 2 | RAG poisoning (knowledge base) | Poisoned documents quarantined at load; content labeled reference-only |
+| 3 | Cross-patient PHI disclosure | Tools derive identity from the session, never from the model |
+| 4 | No authentication | Password login + 6-digit MFA; identity from a session token |
+| 5 | Unsafe advice / no output review | Output filter (PHI + prompt-leak net) + safety rules in the prompt |
+| 6 | Tool misuse + SQL injection | Session-scoped writes + allow-listed update fields |
+| 7 | Memory poisoning | Notes screened on write, labeled untrusted on read |
+| 8 | Hardcoded secrets | All secrets moved to environment variables |
+
+The design principle throughout: **the model never decides whose data it touches — the
+tools derive identity from a verified session.** Even a fully successful prompt injection
+cannot reach another patient's data. Full write-ups, with before/after evidence, are in the
+companion repo (`mediassist-protection`).
+
+**Known limitations (not production-ready):** no login rate-limiting/lockout, sessions are
+in-memory (reset on restart), and MFA delivery is stubbed to the server console (a real
+send needs a paid Twilio/SendGrid account). These are the gap between a hardened demo and a
+deployable product.
+
+---
+
 ## Getting Started
 
 ### 1. Fork and Clone
@@ -64,22 +92,21 @@ python main.py
 
 Open **http://localhost:8000** in your browser.
 
-### 6. Sign In
+### 6. Sign In (username + password + MFA)
 
-Enter any patient ID from **1 through 10** on the login screen. No password required.
+Log in with a username and password, then a 6-digit code. Username = the email local-part;
+password = `MediPass<id>!`.
 
-| ID | Name |
-|----|------|
-| 1 | Margaret |
-| 2 | James |
-| 3 | Sofia |
-| 4 | Robert |
-| 5 | Priya |
-| 6 | David |
-| 7 | Amara |
-| 8 | Carlos |
-| 9 | Lisa |
-| 10 | Thomas |
+| ID | Name | Username | Password |
+|----|------|----------|----------|
+| 1 | Margaret Chen | `mchen1965` | `MediPass1!` |
+| 2 | James Okafor | `jokafor78` | `MediPass2!` |
+| 3 | Sofia Ramirez | `sramirez92` | `MediPass3!` |
+| … | … | (email before @) | `MediPass<id>!` |
+
+After the password step, the **6-digit MFA code is printed in the terminal** running the app
+(`[MFA] Code for m********@email.com: 123456`). In production this would be texted or emailed;
+for this demo it prints to the console. Enter the code to reach the chat.
 
 ---
 
